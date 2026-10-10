@@ -1,0 +1,63 @@
+# Stimulated(Anti.CD3.CD28.IL.2) vs Unstimulated
+
+STIM_vs_UNSTIM
+
+#Save the original result
+res_Stim_Unstim <- results(dds)
+
+
+
+#Log fold change for visualization and ranking
+res_lfcsc <- lfcShrink(dds, coef = "treatment_Anti.CD3.CD28.IL.2.stimulated.for.4h_vs_Unstimulated" , type = "apeglm")
+
+
+#MA plot
+plotMA(df1, ylim=c(-6,6))
+
+
+# Volcano plot
+#Volcano plot
+
+res_lfcsc <- as.data.frame(res_lfcsc)
+res_lfcsc$Ensembl_id <- rownames(res_lfcsc)
+res_lfcsc <- res_lfcsc[, c("Ensembl_id" ,setdiff(names(res_lfcsc), "Ensembl_id"))]
+rownames(res_lfcsc) <- NULL
+res_lfcsc <- res_lfcsc[!is.na(res_lfcsc$padj), ]
+res_lfcsc_subset <- subset(res_lfcsc, padj < 0.05 & abs(log2FoldChange) > 1)
+res_lfcsc_subset <- res_lfcsc_subset[order(-abs(res_lfcsc_subset$log2FoldChange)), ]
+top <- res_lfcsc_subset$Ensembl_id[1:20]
+
+EnhancedVolcano(res_lfcsc_subset, lab = res_lfcsc_subset$Ensembl_id, x = "log2FoldChange", y = "padj",selectLab = top, ylim = c(0, 100))
+
+
+
+#GENE SET ENRICHMENT ANALYSIS
+
+
+# GENE SET ENRICHMENT ANALYSIS
+
+res_Stim_Unstim <- as.data.frame(res_Stim_Unstim)
+
+res_Stim_Unstim$Ensembl_id <- rownames(res_Stim_Unstim)
+res_Stim_Unstim <- res_Stim_Unstim[, c("Ensembl_id" , setdiff(names(res_Stim_Unstim), "Ensembl_id"))]
+rownames(res_Stim_Unstim) <- NULL
+deg <- res_Stim_Unstim
+
+
+# rank the genes
+deg_order_fc <- deg[order(-deg$log2FoldChange), ]
+head(deg_order_fc)
+
+
+# get logFC
+log2fc <- deg_order_fc$log2FoldChange
+
+
+# make a named vector of logFC
+names(log2fc) <- deg_order_fc$Ensembl_id
+log2fc <- log2fc[!is.na(log2fc)]
+log2fc <- log2fc[!is.na(names(log2fc))]
+
+enrich_go_gsea <- gseGO(geneList = log2fc, OrgDb = org.Hs.eg.db, ont = "ALL", pvalueCutoff = 0.05, keyType ="ENSEMBL", verbose= FALSE)
+dotplot_enrich_go_gsea <- dotplot(enrich_go_gsea, showCategory = 30, orderBy="GeneRatio")
+
