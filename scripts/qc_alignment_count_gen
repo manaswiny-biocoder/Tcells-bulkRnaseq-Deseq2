@@ -1,0 +1,81 @@
+#!/usr/bin/bash
+
+
+#pwd
+cd ~/rna_seq_project/Project_2/data
+
+
+#Run fastqc
+fastqc fastq_files/*.fastq.gz -o fastqc_results
+
+
+
+#Run Multiqc
+multiqc fastqc_results -o multiqc_results
+
+
+#Run fastp
+for r1 in fastq_files/*_1.fastq.gz
+do 
+    sample=$(basename "$r1" _1.fastq.gz)
+	  r2="fastq_files/${sample}_2.fastq.gz"
+
+
+
+	  fastp \
+		   -i "$r1" \
+		   -I "$r2" \
+		   -o "fastq_trimmedfiles/${sample}_1.trimmed.fastq.gz" \
+		   -O "fastq_trimmedfiles/${sample}_2.trimmed.fastq.gz" \
+  	   --trim_poly_g
+
+done
+
+
+# Run fastqc on trimmed.fastq files
+fastqc fastq_trimmedfiles/*trimmed.fastq.gz -o fastqc_results
+
+
+
+# HISAT2 ALIGNMENT
+for r1 in fastq_trimmedfiles/*_1.trimmed.fastq.gz
+do
+
+       sample=$(basename "$r1" _1.trimmed.fastq.gz)
+	     r2="fastq_trimmedfiles/${sample}_2.trimmed.fastq.gz"
+
+
+	hisat2 \
+		-x grch38_genome/grch38/genome \
+		-1 "$r1" \
+		-2 "$r2" \
+		-S "${sample}.sam"
+
+done
+
+# Bam sorted file generation
+for sam in sam_files/*.sam
+do 
+sample=$(basename "$sam" .sam)
+
+
+	samtools sort \
+		-O BAM \
+		-o "bam_sorted_files/${sample}.sorted.bam" \
+		"$sam"
+
+done
+
+#Run featurecount
+for bam in bam_sorted_files/*bam
+do
+sample=$(basename "$bam" .bam)
+
+
+	featureCounts \
+		-p --countReadPairs \
+		-a "Homo_sapiens.GRCh38.116.gtf.gz" \
+		-o feature.counts \
+#		"$bam"
+
+#done
