@@ -1,10 +1,22 @@
 # Stimulated(Anti.CD3.CD28.IL.2) vs Unstimulated
-
-STIM_vs_UNSTIM
-
-#Save the original result
 res_Stim_Unstim <- results(dds)
+res_Stim_Unstim <- as.data.frame(res_Stim_Unstim) %>%
+     rownames_to_column("Ensembl_id") %>%
+     filter(!is.na(padj))
+sig_deg <- res_Stim_Unstim %>%
+    filter(padj < 0.05 , abs(log2FoldChange) > 1 )
+sig_deg_up <- sig_deg[sig_deg$log2FoldChange >1,]
+sig_deg_up <- sig_deg_up[order(sig_deg_up$log2FoldChange, decreasing = TRUE), ]
 
+sig_deg_up$symbol <- mapIds(org.Hs.eg.db,
+                         keys      = sig_deg_up$Ensembl_id,
+                         column    = "SYMBOL",
+                         keytype   = "ENSEMBL",
+                         multiVals = "first")
+
+
+
+write.table(sig_deg_up, file = "Result_table/STIM_vs_UNSTIM.csv")
 
 
 #Log fold change for visualization and ranking
@@ -12,7 +24,7 @@ res_lfcsc <- lfcShrink(dds, coef = "treatment_Anti.CD3.CD28.IL.2.stimulated.for.
 
 
 #MA plot
-plotMA(df1, ylim=c(-6,6))
+plotMA(res_lfcsc, ylim=c(-6,6))
 
 
 # Volcano plot
@@ -60,4 +72,7 @@ log2fc <- log2fc[!is.na(names(log2fc))]
 
 enrich_go_gsea <- gseGO(geneList = log2fc, OrgDb = org.Hs.eg.db, ont = "ALL", pvalueCutoff = 0.05, keyType ="ENSEMBL", verbose= FALSE)
 dotplot_enrich_go_gsea <- dotplot(enrich_go_gsea, showCategory = 30, orderBy="GeneRatio")
+
+
+
 
