@@ -1,0 +1,121 @@
+
+
+#This script carries of differential gene expression on the project(GSE338910)
+
+
+
+
+#Biological question to answer
+#experiment aims to study the transcriptomic changes that occur
+#in human T cells upto costimulatory activation using anti-CD3/CD28 and human recombinant IL2.
+
+
+#Load libraries
+library(ggplot2)
+library(tidyverse)
+library(dplyr)
+library(GEOquery)
+library(DESeq2)
+library(pheatmap)
+library(RColorBrewer)
+library(apeglm)
+library(EnhancedVolcano)
+library(clusterProfiler)
+library(org.Hs.eg.db)
+library(DOSE)
+library(enrichplot)
+
+#directories
+dir.create("QC_Plots")
+dir.create("Result_Plots")
+dir.create("Result_table")
+
+
+#read the count matrix we have generated previously to the r env
+counts_mtx <- read.table(
+  file = "D:/manu_bioinformatics/R_programming/Bulk_rna_seq_DESeq2-2/counts.txt",
+  header = TRUE,
+  sep = "\t",
+  row.names = 1,        # use Geneid column as row names
+  comment.char = "#",   # skip featureCounts command-line comment
+  check.names = FALSE,  # keep sample names unchanged
+  stringsAsFactors = FALSE
+)
+
+
+
+# extract the metadata info 
+gse <- getGEO(GEO = "GSE338910" , GSEMatrix = TRUE)
+metadata <- pData(phenoData(gse[[1]]))
+
+
+
+
+# modify  count_mtx
+counts_mtx_mod <- counts_mtx[ , -(1:5)] # extract the columns which has the samples only
+colnames(counts_mtx_mod)[c(1,2,3,4,5,6)] <- c("GSM9884730", "GSM9884729", "GSM9884728" , "GSM9884727",
+                                          "GSM9884726" , "GSM9884725") # change the colnames from SRR to sample name
+counts_mtx_mod <- counts_mtx_mod[, c(6,5,4,3,2,1)] # change the order to match the metadata
+
+
+
+# modify metadata
+metadata_mod <- metadata[ , c(1,11,12)] #extract the columns that has our variable of interest 
+metadata_mod <- metadata_mod %>% rename(treatment = characteristics_ch1.1,batch = characteristics_ch1.2)# change the column names 
+metadata_mod <- metadata_mod %>% mutate(treatment = gsub("treatment: ", "" ,treatment), batch = gsub("batch: " , "" , batch),
+         batch = gsub("Donor A" , "DonorA" , batch), batch = gsub("Donor B" , "DonorB" , batch),
+         batch = gsub("Donor C" , "DonorC" , batch)) # modify the columns content 
+
+
+
+# match the rownames of metadata to colnames of counts
+all(rownames(metadata_mod) %in% colnames(counts_mtx_mod))
+all(rownames(metadata_mod) == colnames(counts_mtx_mod))
+
+
+
+# convert the variable of interest into factor and set reference level
+metadata_mod$treatment <- relevel(as.factor(metadata_mod$treatment) , ref = "Unstimulated")
+metadata_mod$batch <- relevel(as.factor(metadata_mod$batch) ,ref = "DonorA")
+
+
+# constructing DESeq-dataset
+dds <- DESeqDataSetFromMatrix( countData = counts_mtx_mod ,
+                               colData = metadata_mod,
+                               design = ~ batch + treatment )
+
+
+
+#gene level sample filtering
+nrow(dds)
+smallestGroupSize <- 2
+keep <- rowSums(counts(dds) >= 10) >= smallestGroupSize
+dds <- dds[keep,]
+nrow(dds)
+
+## Exploratory analysis and visualization of the deseqdataset .
+## visually explore sample relationships.
+
+#Regularized log transformation
+rld <- rlog(dds , blind = TRUE)
+
+
+## PRINICIPAL COMPONENT ANALYSIS
+plotPCA(rld , intgroup = "treatment")
+
+
+## HIERARCHICAL CLUSTERING
+rld_mat <- assay(rld) # extract rlog matrix from the object rld
+rld_cor <- cor(rld_mat) # compute pairwise correlation values
+
+
+# Ploting heatmap
+pheatmap(rld_cor)
+
+
+### Run DESeq2
+dds <- DESeq(dds)
+STIM_vs_UNSTIM <- results(dds)
+
+
+
